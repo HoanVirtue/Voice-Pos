@@ -11,3 +11,4 @@ Thumbs.db
 .vs/
 # Claude local
 .claude/settings.local.json
+backend/BanHang.WebAPI/appsettings.json
