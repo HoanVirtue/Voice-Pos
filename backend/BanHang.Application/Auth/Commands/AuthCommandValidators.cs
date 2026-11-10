@@ -1,0 +1,17 @@
+using FluentValidation;
+
+namespace BanHang.Application.Auth.Commands;
+
+public sealed class LoginCommandValidator : AbstractValidator<LoginCommand>
+{
+    public LoginCommandValidator()
+    {
+        RuleFor(x => x.Username).NotEmpty().WithMessage("Tên đăng nhập không được để trống");
+        RuleFor(x => x.Password).NotEmpty().WithMessage("Mật khẩu không được để trống");
+    }
+}
+
+public sealed class RefreshTokenCommandValidator : AbstractValidator<RefreshTokenCommand>
+{
+    public RefreshTokenCommandValidator() => RuleFor(x => x.RefreshToken).NotEmpty();
+}
