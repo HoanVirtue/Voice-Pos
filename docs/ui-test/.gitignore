@@ -1,0 +1,4 @@
+# Log/ảnh sinh ra khi chạy test: không commit (trừ 2 báo cáo)
+logs/*
+!logs/FINDINGS.md
+!logs/FIX-LOG.md

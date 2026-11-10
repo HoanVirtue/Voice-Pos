@@ -1,0 +1,225 @@
+### BanHang API — dùng với REST Client (VS Code) hoặc HTTP client của Rider/Visual Studio.
+### Chạy API local: `dotnet run --project backend/BanHang.WebAPI` (http://localhost:5299) hoặc docker compose (http://localhost:8080).
+### Mọi phản hồi bọc dạng { "success": bool, "errors": [], "result": ... }; lỗi (400/401/403/404/409) trả { "message", "errors" }.
+
+@baseUrl = http://localhost:5299
+@username = bo
+@password = <mật khẩu seed của tài khoản bo>
+
+### Sức khỏe
+GET {{baseUrl}}/health
+
+### Đăng nhập
+# @name login
+POST {{baseUrl}}/api/v1/Auth/login
+Content-Type: application/json
+
+{ "username": "{{username}}", "password": "{{password}}" }
+
+###
+@accessToken = {{login.response.body.$.result.accessToken}}
+@refreshToken = {{login.response.body.$.result.refreshToken}}
+
+### Làm mới token (refresh token xoay vòng: dùng được MỘT lần)
+# @name refresh
+POST {{baseUrl}}/api/v1/Auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{refreshToken}}" }
+
+### Đăng xuất (thu hồi refresh token)
+POST {{baseUrl}}/api/v1/Auth/logout
+Content-Type: application/json
+
+{ "refreshToken": "{{refreshToken}}" }
+
+### Thông tin tài khoản và quyền hiệu lực
+GET {{baseUrl}}/api/v1/Users/Me
+Authorization: Bearer {{accessToken}}
+
+###
+GET {{baseUrl}}/api/v1/Permission/Mine
+Authorization: Bearer {{accessToken}}
+
+### Không có token -> 401
+GET {{baseUrl}}/api/v1/Customers
+
+### Tạo khách (Id do client sinh; gửi lại cùng Id là idempotent)
+POST {{baseUrl}}/api/v1/Customers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "id": "0192f1a0-7b3c-7000-8000-000000000001",
+  "name": "Chị Hoa",
+  "alias": "Hoa chợ",
+  "phone": "0901234567",
+  "note": "Lấy ba chỉ mỗi sáng"
+}
+
+### Tạo-hoặc-sửa theo Id trên đường dẫn
+PUT {{baseUrl}}/api/v1/Customers/0192f1a0-7b3c-7000-8000-000000000001
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "name": "Chị Hoa", "alias": "Hoa chợ", "phone": "0901234999", "note": "Đổi số" }
+
+### Lấy một khách
+GET {{baseUrl}}/api/v1/Customers/0192f1a0-7b3c-7000-8000-000000000001
+Authorization: Bearer {{accessToken}}
+
+### Danh sách + phân trang + tìm kiếm (tên, tên gọi, số điện thoại)
+GET {{baseUrl}}/api/v1/Customers?pageIndex=1&pageSize=20&keyword=hoa
+Authorization: Bearer {{accessToken}}
+
+### Đồng bộ cho app: chỉ lấy thay đổi sau mốc UTC, kèm khách đã xóa (sắp theo updatedAt tăng dần)
+GET {{baseUrl}}/api/v1/Customers?updatedSince=2026-01-01T00:00:00Z&includeDeleted=true&pageSize=200
+Authorization: Bearer {{accessToken}}
+
+### Xóa mềm (idempotent)
+DELETE {{baseUrl}}/api/v1/Customers/0192f1a0-7b3c-7000-8000-000000000001
+Authorization: Bearer {{accessToken}}
+
+### Validate: tên trống + Id rỗng -> 400, thông báo tiếng Việt
+POST {{baseUrl}}/api/v1/Customers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "id": "00000000-0000-0000-0000-000000000000", "name": "" }
+
+### Token nhận dạng giọng nói (Blaze) cho app
+GET {{baseUrl}}/api/v1/Voice/stt-token
+Authorization: Bearer {{accessToken}}
+
+### Tải file lên (ví dụ bản ghi âm), trả về đường dẫn tương đối
+POST {{baseUrl}}/api/v1/Files/upload
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=----banhang
+
+------banhang
+Content-Disposition: form-data; name="folder"
+
+voice
+------banhang
+Content-Disposition: form-data; name="file"; filename="ghi-am.m4a"
+Content-Type: audio/mp4
+
+< ./ghi-am.m4a
+------banhang--
+
+### Tải file về (thay path bằng giá trị trả về ở bước upload)
+GET {{baseUrl}}/api/v1/Files/download?path=voice/<guid>.m4a
+Authorization: Bearer {{accessToken}}
+
+### Quản trị: danh sách tài khoản (cần quyền Users.Manage — chỉ admin) -> bo/me nhận 403
+GET {{baseUrl}}/api/v1/Users
+Authorization: Bearer {{accessToken}}
+
+### ===== Sổ bán hàng: món hàng, lô hàng, giao dịch, chốt sổ, báo cáo (xem docs/hop-dong-api-so-ban-hang.md) =====
+@productId = 11111111-1111-4111-8111-111111111111
+@batchId = 22222222-2222-4222-8222-222222222222
+@customerId = 33333333-3333-4333-8333-333333333333
+@txId = 44444444-4444-4444-8444-444444444444
+@settlementId = 55555555-5555-4555-8555-555555555555
+
+### Món hàng: tạo/sửa (idempotent), danh sách, đồng bộ, xóa mềm
+POST {{baseUrl}}/api/v1/Products
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "id": "{{productId}}", "name": "Ba chỉ", "alias": "ba rọi", "pricePerKg": 130000 }
+
+###
+PUT {{baseUrl}}/api/v1/Products/{{productId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "name": "Ba chỉ", "alias": "ba rọi", "pricePerKg": 135000 }
+
+###
+GET {{baseUrl}}/api/v1/Products?updatedSince=2026-01-01T00:00:00Z&includeDeleted=true
+Authorization: Bearer {{accessToken}}
+
+###
+DELETE {{baseUrl}}/api/v1/Products/{{productId}}
+Authorization: Bearer {{accessToken}}
+
+### Lô hàng (con lợn)
+POST {{baseUrl}}/api/v1/Batches
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "id": "{{batchId}}", "date": "2026-11-09", "pigCount": 2, "liveWeightGram": 180000, "carcassWeightGram": 140000, "buyCost": 9000000, "otherCost": 300000, "note": "lợn nhà ông Ba" }
+
+###
+GET {{baseUrl}}/api/v1/Batches?updatedSince=2026-01-01T00:00:00Z&includeDeleted=true
+Authorization: Bearer {{accessToken}}
+
+###
+DELETE {{baseUrl}}/api/v1/Batches/{{batchId}}
+Authorization: Bearer {{accessToken}}
+
+### Giao dịch: type = Sale | DebtPayment | BuyPig | Expense | CashOut
+# Sale: amount = tổng bán, paidAmount = trả ngay (nợ = amount - paidAmount, nợ thì bắt buộc customerId)
+POST {{baseUrl}}/api/v1/Transactions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "id": "{{txId}}", "occurredAt": "2026-11-09T03:00:00Z", "type": "Sale", "customerId": "{{customerId}}", "productId": "{{productId}}", "batchId": "{{batchId}}", "weightGram": 5000, "amount": 1000000, "paidAmount": 400000, "rawText": "bán chị Lan năm ký ba chỉ", "confidence": 0.9 }
+
+### Thu nợ (bắt buộc customerId)
+POST {{baseUrl}}/api/v1/Transactions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "id": "44444444-4444-4444-8444-444444444445", "occurredAt": "2026-11-09T04:00:00Z", "type": "DebtPayment", "customerId": "{{customerId}}", "amount": 100000 }
+
+### Chi khác
+POST {{baseUrl}}/api/v1/Transactions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "id": "44444444-4444-4444-8444-444444444446", "occurredAt": "2026-11-09T05:00:00Z", "type": "Expense", "amount": 50000, "note": "tiền đá" }
+
+### Danh sách + lọc (from/to UTC, customerId, type) và đồng bộ
+GET {{baseUrl}}/api/v1/Transactions?type=Sale&customerId={{customerId}}&from=2026-11-08T17:00:00Z&to=2026-11-09T17:00:00Z
+Authorization: Bearer {{accessToken}}
+
+###
+GET {{baseUrl}}/api/v1/Transactions?updatedSince=2026-01-01T00:00:00Z&includeDeleted=true
+Authorization: Bearer {{accessToken}}
+
+###
+DELETE {{baseUrl}}/api/v1/Transactions/{{txId}}
+Authorization: Bearer {{accessToken}}
+
+### Chốt sổ ngày (server tự tính expectedCash, difference; trùng ngày với Id khác -> 409)
+POST {{baseUrl}}/api/v1/DaySettlements
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{ "id": "{{settlementId}}", "date": "2026-11-09", "openingCash": 1000000, "countedCash": 1400000, "note": "két đủ" }
+
+###
+GET {{baseUrl}}/api/v1/DaySettlements
+Authorization: Bearer {{accessToken}}
+
+### Báo cáo ngày (giờ VN)
+GET {{baseUrl}}/api/v1/Reports/Daily?date=2026-11-09&openingCash=1000000
+Authorization: Bearer {{accessToken}}
+
+### Công nợ: tất cả khách còn nợ / chi tiết một khách
+GET {{baseUrl}}/api/v1/Reports/Debts
+Authorization: Bearer {{accessToken}}
+
+###
+GET {{baseUrl}}/api/v1/Reports/Debts/{{customerId}}
+Authorization: Bearer {{accessToken}}
+
+### Gợi ý tiền mang đi chợ
+GET {{baseUrl}}/api/v1/Reports/MarketCash?pigCount=3&pigPrice=4000000&supplierDebt=1000000&reservePercent=10
+Authorization: Bearer {{accessToken}}
+
+### Lãi theo lô
+GET {{baseUrl}}/api/v1/Reports/BatchProfit/{{batchId}}
+Authorization: Bearer {{accessToken}}
