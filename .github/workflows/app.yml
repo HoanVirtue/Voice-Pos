@@ -1,0 +1,47 @@
+name: app
+
+on:
+  push:
+    paths:
+      - 'app/**'
+      - '.github/workflows/app.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - '.github/workflows/app.yml'
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # drift test dung sqlite3 native tren may chu.
+      - name: Cai libsqlite3
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+        working-directory: .
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      # Ma sinh (drift: *.g.dart) khong commit, sinh lai o day.
+      - name: build_runner
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: flutter analyze
+        run: flutter analyze
+
+      - name: flutter test
+        run: flutter test

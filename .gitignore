@@ -1,0 +1,13 @@
+# Secrets & local data
+.env
+*.env.local
+backend/BanHang.WebAPI/data/
+data/
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.vs/
+# Claude local
+.claude/settings.local.json

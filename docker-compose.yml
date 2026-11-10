@@ -1,0 +1,61 @@
+# Dev:    docker compose up -d db          (chỉ MySQL; chạy API bằng `dotnet run` trong backend/BanHang.WebAPI)
+# Đầy đủ: docker compose up -d --build     (MySQL + API)
+# Mọi giá trị lấy từ file .env (sao chép từ .env.example).
+services:
+  db:
+    image: mysql:8.0
+    container_name: banhang-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Thiếu MYSQL_ROOT_PASSWORD trong .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-banhang}
+      MYSQL_USER: ${MYSQL_USER:-banhang}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Thiếu MYSQL_PASSWORD trong .env}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: banhang-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__BanHangConnection: "Server=db;Port=3306;Database=${MYSQL_DATABASE:-banhang};User=${MYSQL_USER:-banhang};Password=${MYSQL_PASSWORD};CharSet=utf8mb4"
+      Jwt__Secret: ${Jwt__Secret:?Thiếu Jwt__Secret trong .env}
+      AllowedOrigins__0: ${AllowedOrigins__0:-http://localhost:3000}
+      Blaze__Token: ${Blaze__Token:-}
+      Seed__AdminPassword: ${Seed__AdminPassword:-}
+      Seed__BoPassword: ${Seed__BoPassword:-}
+      Seed__MePassword: ${Seed__MePassword:-}
+      FileStorage__RootPath: /app/data/files
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - api_files:/app/data/files
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /health HTTP/1.0\\r\\n\\r\\n\" >&3 && head -n1 <&3 | grep -q 200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  db_data:
+  api_files:

@@ -1,0 +1,42 @@
+name: backend
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: backend/global.json
+
+      - name: Restore
+        run: dotnet restore BanHang.sln
+
+      - name: Build
+        run: dotnet build BanHang.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test BanHang.sln --configuration Release --no-build --verbosity normal
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (không push)
+        run: docker build -t banhang-api:ci backend
